@@ -1,13 +1,17 @@
 package site.yalong;
 
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.*;
 import com.sun.jna.ptr.IntByReference;
+
 
 /**
  * @author yaLong
  */
 public class MyUser32 {
-    private static final User32 USER32 = User32.INSTANCE;
+    public static final User32 USER32 = User32.INSTANCE;
 
     /**
      * 找进程的pid
@@ -43,7 +47,7 @@ public class MyUser32 {
         ip.input.ki.wScan = new WinDef.WORD(0);
         ip.input.ki.wVk = new WinDef.WORD(keyCode);
         ip.input.ki.dwFlags = new WinDef.DWORD(0);
-        User32.INSTANCE.SendInput(new WinDef.DWORD(1), new WinUser.INPUT[]{ip}, ip.size());
+        USER32.SendInput(new WinDef.DWORD(1), new WinUser.INPUT[]{ip}, ip.size());
     }
 
     /**
@@ -54,7 +58,7 @@ public class MyUser32 {
         ip.input.ki.wScan = new WinDef.WORD(0);
         ip.input.ki.wVk = new WinDef.WORD(keyCode);
         ip.input.ki.dwFlags = new WinDef.DWORD(WinUser.KEYBDINPUT.KEYEVENTF_KEYUP);
-        User32.INSTANCE.SendInput(new WinDef.DWORD(1), new WinUser.INPUT[]{ip}, ip.size());
+        USER32.SendInput(new WinDef.DWORD(1), new WinUser.INPUT[]{ip}, ip.size());
     }
 
 
@@ -108,12 +112,34 @@ public class MyUser32 {
 
     }
 
-    public static void main(String[] args) throws InterruptedException {
-        for (int i = 0; i < 101; i++) {
-            sendString("//aaa乌 漆@麻!^&黑!abcd" + i);
-            keyPressed(13);
-            keyReleased(13);
-        }
+    public static void sendMsg(WinDef.HWND hWnd, String message) {
+        byte[] bytes = message.getBytes();
+
+        Pointer memory = new Memory(bytes.length);
+        long meer = Pointer.nativeValue(memory);
+        memory.setString(0, message);
+
+        //定义一个消息结构体
+        WinUser.COPYDATASTRUCT copyDataStruct = new WinUser.COPYDATASTRUCT();
+        // 任意值
+        copyDataStruct.dwData = new BaseTSD.ULONG_PTR(0);
+        // 指定lpData内存区域的字节数
+        copyDataStruct.cbData = bytes.length;
+        // 发送给目标窗口所在进程的数据
+        copyDataStruct.lpData = memory;
+        copyDataStruct.write();
+
+        Pointer pointer = copyDataStruct.getPointer();
+        long peer = Pointer.nativeValue(pointer);
+        USER32.SendMessage(hWnd, WinUser.WM_COPYDATA, new WinDef.WPARAM(0), new WinDef.LPARAM(peer));
+        // 手动释放内存
+        Native.free(meer);
+        Native.free(peer);
+        // 避免Memory对象被GC时重复执行Nativ.free()方法
+        Pointer.nativeValue(pointer, 0);
+        Pointer.nativeValue(memory, 0);
 
     }
+
+
 }
